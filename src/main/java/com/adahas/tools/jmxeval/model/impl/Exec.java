@@ -8,6 +8,8 @@ import javax.management.JMException;
 import javax.management.ObjectName;
 import javax.management.openmbean.CompositeData;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.w3c.dom.Node;
 
 import com.adahas.tools.jmxeval.Context;
@@ -19,6 +21,8 @@ import com.adahas.tools.jmxeval.model.PerfDataSupport;
  * Element to configure JMX calls
  */
 public class Exec extends Element implements PerfDataSupport {
+	
+  private static final Logger log = LogManager.getLogger(Eval.class);
 
   /**
    * Variable name
@@ -101,9 +105,33 @@ public class Exec extends Element implements PerfDataSupport {
         context.setVar(var.get(), returnValue);
       } else if (returnValue instanceof CompositeData) {
         final CompositeData compositeData = (CompositeData) returnValue;
+        if(valueOnFailure.get() == null && !compositeData.containsKey(operationName)) {
+        	log.debug("Unable to locate attribute inside returned CompositeData object.");
+        }
         context.setVar(var.get(), compositeData.get(compositeAttribute.get()));
+      } else if (returnValue instanceof CompositeData[]){
+    	  final CompositeData  cdArray[] = (CompositeData[]) returnValue;
+    	  if ( cdArray != null ) {
+    		  Object result = null;
+              for ( int  i = 0; i < cdArray.length; ++i ) { 
+                CompositeData compositeData = cdArray[i];
+              	log.debug("Array item " + i);
+                if(compositeData.containsKey(compositeAttribute.get())) {
+                	result = compositeData.get(compositeAttribute.get());
+                    break;
+                } else {
+                	log.debug("Unable to locate attribute inside returned CompositeData array item " + i);
+                }
+              }
+              if (result != null) {
+                  context.setVar(var.get(), result);
+              } else {
+            	  throw new JMXEvalException("Unable to get composite attribute in CompositeData array.");  
+              }
+    	  }    		  
       } else {
-        throw new JMXEvalException("Unable to get composite attribute");
+    	log.debug("Error while evaluating operation response");
+        throw new JMXEvalException("Unable to get composite attribute. Unknown return type.");
       }
 
       // process child elements
